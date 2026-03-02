@@ -31,7 +31,7 @@ def convert(image: np.ndarray, style: str, line_thickness: int = 2) -> np.ndarra
     """
     if style not in SUPPORTED_STYLES:
         raise ValueError(
-            f"Unknown style '{style}'. Choose from: {', '.join(SUPPORTED_STYLES)}"
+            f"Unknown style '{style}'. Supported styles: {', '.join(SUPPORTED_STYLES)}"
         )
 
     line_thickness = max(1, min(5, line_thickness))

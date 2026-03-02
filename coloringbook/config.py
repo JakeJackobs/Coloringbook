@@ -33,7 +33,7 @@ class Config:
             self.output_size = (self.output_width, self.output_height)
         if self.style not in SUPPORTED_STYLES:
             raise ValueError(
-                f"Unknown style '{self.style}'. Choose from: {', '.join(SUPPORTED_STYLES)}"
+                f"Unknown style '{self.style}'. Supported styles: {', '.join(SUPPORTED_STYLES)}"
             )
 
 
