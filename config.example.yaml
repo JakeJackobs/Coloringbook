@@ -1,0 +1,21 @@
+# Coloring Book Engine — example configuration
+# Copy this file to config.yaml and adjust the values.
+
+# Required: folder containing source photographs
+input_folder: ./photos
+
+# Required: folder where coloring pages will be saved
+output_folder: ./coloring_pages
+
+# Style: bold_outline | detailed_line_art | smooth_contour | sketch
+style: bold_outline
+
+# Line thickness (1 = thin, 5 = very thick)
+line_thickness: 2
+
+# Optional: resize output images (both width and height must be set)
+# output_width: 2550   # 8.5 inches at 300 DPI
+# output_height: 3300  # 11 inches at 300 DPI
+
+# Optional: OpenAI API key for AI-enhanced conversion (future feature)
+# openai_api_key: sk-...
