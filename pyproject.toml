@@ -4,22 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "coloringbook"
-version = "1.0.0"
-description = "Convert photographs into coloring book style images for print-on-demand coloring books"
+version = "3.0.0"
+description = "AI-powered conversion of photographs into coloring book illustrations using the OpenAI Responses API with high-fidelity image transformation"
 requires-python = ">=3.10"
 license = "MIT"
 dependencies = [
-    "opencv-python-headless>=4.8.0",
-    "numpy>=1.24.0",
-    "Pillow>=10.0.0",
+    "openai>=1.30.0",
     "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
-ai = [
-    "openai>=1.0.0",
-    "requests>=2.31.0",
-]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",

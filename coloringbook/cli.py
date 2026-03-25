@@ -1,12 +1,16 @@
 """
 Command-line interface for the Coloring Book Engine.
 
-Usage examples:
-    # Convert all images using the default bold_outline style
-    coloringbook --input ./photos --output ./coloring_pages
+Usage examples::
 
-    # Use a specific style with thicker lines
-    coloringbook --input ./photos --output ./coloring_pages --style detailed_line_art --thickness 3
+    # Convert all images using the default classic style
+    coloringbook --input ./Photos --output ./coloring_pages
+
+    # Use a specific style
+    coloringbook --input ./Photos --output ./coloring_pages --style detailed
+
+    # Generate all four styles at once
+    coloringbook --input ./Photos --output ./coloring_pages --style all
 
     # Use a YAML config file
     coloringbook --config config.yaml
@@ -15,19 +19,25 @@ Usage examples:
     coloringbook --list-styles
 """
 
+from __future__ import annotations
+
 import argparse
 import logging
+import os
 import sys
 
-from coloringbook.styles import SUPPORTED_STYLES
-from coloringbook.engine import process_folder
+from coloringbook.styles import SUPPORTED_STYLES, STYLE_INFO
+from coloringbook.engine import process_folder, SUPPORTED_SIZES, DEFAULT_SIZE
 from coloringbook.config import Config, load_config
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="coloringbook",
-        description="Convert photographs into coloring book style images.",
+        description=(
+            "Convert photographs into coloring book illustrations using the "
+            "OpenAI Responses API with high-fidelity image transformation."
+        ),
     )
 
     parser.add_argument(
@@ -40,27 +50,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--style", "-s",
-        choices=SUPPORTED_STYLES,
+        choices=SUPPORTED_STYLES + ["all"],
         default=None,
-        help="Coloring book style (default: bold_outline).",
+        help="Coloring book style, or 'all' for every style (default: classic).",
     )
     parser.add_argument(
-        "--thickness", "-t",
-        type=int,
+        "--size",
+        choices=sorted(SUPPORTED_SIZES),
         default=None,
-        help="Line thickness 1-5 (default: 2).",
+        help=f"Output image dimensions (default: {DEFAULT_SIZE}).",
     )
     parser.add_argument(
-        "--width",
-        type=int,
-        default=None,
-        help="Output image width in pixels (optional).",
-    )
-    parser.add_argument(
-        "--height",
-        type=int,
-        default=None,
-        help="Output image height in pixels (optional).",
+        "--api-key",
+        help="OpenAI API key (or set OPENAI_API_KEY env var, or put in config).",
     )
     parser.add_argument(
         "--config", "-c",
@@ -74,78 +76,78 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--verbose", "-v",
         action="store_true",
-        help="Enable verbose logging.",
+        help="Enable verbose / debug logging.",
     )
 
     return parser
-
-
-STYLE_DESCRIPTIONS = {
-    "bold_outline": "Thick, simplified contours — ideal for young children.",
-    "detailed_line_art": "Fine edges with rich detail — perfect for adult coloring.",
-    "smooth_contour": "Clean, smooth outlines with a cartoon-like feel.",
-    "sketch": "Pencil sketch effect with light shading.",
-}
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    # --list-styles
+    # --list-styles ---------------------------------------------------------
     if args.list_styles:
         print("Available coloring book styles:\n")
         for name in SUPPORTED_STYLES:
-            desc = STYLE_DESCRIPTIONS.get(name, "")
-            print(f"  {name:25s} {desc}")
+            info = STYLE_INFO[name]
+            print(f"  {name:20s} {info['description']}")
+        print(f"\n  {'all':20s} Generate one page in every style above.")
         return 0
 
-    # Logging
+    # Logging ---------------------------------------------------------------
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(levelname)s: %(message)s",
     )
 
-    # Build config — prefer CLI flags, fall back to config file
+    # Build config ----------------------------------------------------------
     if args.config:
         cfg = load_config(args.config)
     else:
         cfg = Config()
 
-    # CLI overrides
+    # CLI overrides ---------------------------------------------------------
     if args.input:
         cfg.input_folder = args.input
     if args.output:
         cfg.output_folder = args.output
     if args.style:
-        cfg.style = args.style
-    if args.thickness is not None:
-        cfg.line_thickness = args.thickness
-    if args.width is not None:
-        cfg.output_width = args.width
-    if args.height is not None:
-        cfg.output_height = args.height
+        if args.style == "all":
+            cfg.styles = list(SUPPORTED_STYLES)
+        else:
+            cfg.styles = [args.style]
+    if args.size:
+        cfg.size = args.size
+    if args.api_key:
+        cfg.openai_api_key = args.api_key
 
-    # Re-derive output_size after overrides
-    if cfg.output_width and cfg.output_height:
-        cfg.output_size = (cfg.output_width, cfg.output_height)
+    # Fall back to env var
+    if not cfg.openai_api_key:
+        cfg.openai_api_key = os.environ.get("OPENAI_API_KEY", "")
 
-    # Validate required fields
+    # Validate required fields ----------------------------------------------
     if not cfg.input_folder:
         parser.error("--input is required (or set input_folder in config).")
     if not cfg.output_folder:
         parser.error("--output is required (or set output_folder in config).")
+    if not cfg.openai_api_key:
+        parser.error(
+            "An OpenAI API key is required. Provide via --api-key, "
+            "the OPENAI_API_KEY environment variable, or a config file."
+        )
 
+    # Run -------------------------------------------------------------------
     results = process_folder(
         input_folder=cfg.input_folder,
         output_folder=cfg.output_folder,
-        style=cfg.style,
-        line_thickness=cfg.line_thickness,
-        output_size=cfg.output_size,
+        api_key=cfg.openai_api_key,
+        styles=cfg.styles,
+        size=cfg.size,
     )
 
     if not results:
-        logging.warning("No images were converted.")
+        logging.warning("No coloring pages were generated.")
         return 1
 
     return 0

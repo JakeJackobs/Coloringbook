@@ -27,3 +27,6 @@ Thumbs.db
 sample_input/
 sample_output/
 .pytest_cache/
+
+# Local config with secrets
+config.yaml

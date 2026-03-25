@@ -1,148 +1,182 @@
 """
-Coloring book style definitions and image processing pipelines.
+Coloring book style definitions with image-transformation prompts.
 
-Supported styles:
-    - bold_outline: Thick, simplified contours ideal for young children
-    - detailed_line_art: Fine edge detection preserving detail for adult coloring
-    - smooth_contour: Clean, smooth outlines with a cartoon-like feel
-    - sketch: Pencil sketch effect with light shading
+Each style defines a specific visual approach for coloring book page generation.
+The prompts instruct the model to **transform the input photograph directly**
+into a coloring book illustration while faithfully preserving the likeness of
+all people and animals in the photo.
+
+Supported styles
+----------------
+- classic          : Bold, clean outlines — ideal for young children (ages 4–8)
+- detailed         : Intricate line art — perfect for adult coloring books
+- whimsical        : Playful, cartoon-like illustrations with fun proportions
+- stained_glass    : Geometric stained-glass window style with bold cell borders
+- johanna_basford  : Lush botanical ink illustration à la Johanna Basford
 """
 
-import cv2
-import numpy as np
+from __future__ import annotations
+
+SUPPORTED_STYLES: list[str] = [
+    "classic",
+    "detailed",
+    "whimsical",
+    "stained_glass",
+    "johanna_basford",
+]
+
+# ---------------------------------------------------------------------------
+# Shared base instructions appended to every style prompt
+# ---------------------------------------------------------------------------
+
+_BASE_INSTRUCTIONS = (
+    "CRITICAL — you MUST follow ALL of these requirements:\n"
+    "• The output MUST faithfully depict the SAME people, animals, poses, "
+    "expressions, clothing, and scene composition as the input photograph. "
+    "Preserve every subject's likeness, proportions, and distinguishing features.\n"
+    "• Black outlines ONLY on a pure white background.\n"
+    "• Absolutely NO shading, NO gradients, NO gray tones, NO crosshatching, "
+    "NO stippling, NO fill patterns, NO solid black fills.\n"
+    "• Every region must be enclosed by clear, CLOSED lines suitable for coloring.\n"
+    "• The output must look like a page from a professionally printed coloring book."
+)
+
+# ---------------------------------------------------------------------------
+# Per-style metadata and transformation prompts
+# ---------------------------------------------------------------------------
+
+STYLE_INFO: dict[str, dict[str, str]] = {
+    "classic": {
+        "name": "Classic",
+        "description": (
+            "Bold, clean outlines with simplified shapes — "
+            "ideal for children ages 4–8."
+        ),
+        "prompt": (
+            "Transform this photograph into a black-and-white coloring book page.\n\n"
+            "Style: CLASSIC / CHILDREN'S COLORING BOOK\n"
+            "• Bold, clean, thick black outlines.\n"
+            "• Simplified shapes and forms — minimal fine detail.\n"
+            "• Simplified enough for a child aged 4–8 to color.\n\n"
+            + _BASE_INSTRUCTIONS
+        ),
+    },
+    "detailed": {
+        "name": "Detailed Line Art",
+        "description": (
+            "Intricate line art with fine details — "
+            "perfect for adult coloring books."
+        ),
+        "prompt": (
+            "Transform this photograph into a black-and-white coloring book page.\n\n"
+            "Style: DETAILED LINE ART / ADULT COLORING BOOK\n"
+            "• Intricate line art with fine details and many small areas to color.\n"
+            "• Decorative patterns and textures suggested through line work only.\n"
+            "• High detail level with clean, precise lines.\n\n"
+            + _BASE_INSTRUCTIONS
+        ),
+    },
+    "whimsical": {
+        "name": "Whimsical",
+        "description": (
+            "Playful, cartoon-like illustrations with fun proportions — "
+            "cheerful and inviting."
+        ),
+        "prompt": (
+            "Transform this photograph into a black-and-white coloring book page.\n\n"
+            "Style: WHIMSICAL / STORYBOOK\n"
+            "• Playful, cartoon-like illustration style with slightly exaggerated, "
+            "fun proportions.\n"
+            "• Rounded, friendly shapes with bold, clean outlines.\n"
+            "• Cheerful, inviting, storybook illustration feel.\n\n"
+            + _BASE_INSTRUCTIONS
+        ),
+    },
+    "stained_glass": {
+        "name": "Stained Glass",
+        "description": (
+            "Geometric stained-glass window style with bold cell borders."
+        ),
+        "prompt": (
+            "Transform this photograph into a black-and-white coloring book page.\n\n"
+            "Style: STAINED GLASS\n"
+            "• Stained-glass window style: the scene divided into geometric and "
+            "organic shaped segments.\n"
+            "• Thick, bold black lines separating each segment, like a real "
+            "stained-glass window.\n"
+            "• Include a decorative border frame around the entire illustration.\n\n"
+            + _BASE_INSTRUCTIONS
+        ),
+    },
+    "johanna_basford": {
+        "name": "Johanna Basford",
+        "description": (
+            "Intricate hand-drawn botanical ink illustration in the style of "
+            "Johanna Basford — lush, dense, and enchanting."
+        ),
+        "prompt": (
+            "Transform this photograph into a black-and-white coloring book page.\n\n"
+            "Style: INTRICATE BOTANICAL INK ILLUSTRATION / SECRET GARDEN\n"
+            "• Recreate the scene as a clean, elegant ink illustration in the "
+            "tradition of premium adult botanical coloring books.\n"
+            "• Adorn the background and open areas with LARGE, BOLD botanical "
+            "elements — big statement flowers, broad leaves, sweeping ferns, "
+            "thick vines, and full blossoms. Avoid tiny, fiddly, repetitive "
+            "filler patterns. Each botanical element should be LARGE enough "
+            "to comfortably color in.\n"
+            "• VARY the botanical elements across the composition — mix "
+            "different flower species, leaf shapes, seed pods, mushrooms, "
+            "succulents, wildflowers, water plants, or forest flora depending "
+            "on the scene. No two areas should look the same.\n"
+            "• Use CLEAN, CRISP, PRECISE line work throughout — as if printed "
+            "by a professional publisher. Every line must be smooth, confident, "
+            "and deliberate. Absolutely NO sketchy lines, NO rough edges, "
+            "NO wobbly strokes, NO stray marks, NO scribbles, NO noise.\n"
+            "• Use only TWO line weights: medium-thin lines for botanical "
+            "details and bold thick lines for main subject outlines.\n"
+            "• Keep each element clearly defined with clean edges — leaves, "
+            "petals, and vines must be distinct, separate shapes.\n"
+            "• Leave generous clean white space INSIDE each enclosed region "
+            "so it is easy and satisfying to color.\n"
+            "• Embed a few small hidden details: a bird, butterfly, or tiny "
+            "creature tucked among the foliage.\n"
+            "• Add a decorative botanical border around the illustration.\n"
+            "• The feel should be magical and enchanting — a secret garden.\n"
+            "• The overall look should be POLISHED and PROFESSIONAL — like "
+            "a high-end published coloring book, NOT a hand sketch.\n\n"
+            + _BASE_INSTRUCTIONS
+        ),
+    },
+}
 
 
-SUPPORTED_STYLES = ["bold_outline", "detailed_line_art", "smooth_contour", "sketch"]
-
-
-def convert(image: np.ndarray, style: str, line_thickness: int = 2) -> np.ndarray:
-    """Convert a BGR image to a coloring book page using the specified style.
+def get_style(name: str) -> dict[str, str]:
+    """Return the style info dict for the given style name.
 
     Args:
-        image: Input image as a BGR numpy array (as returned by cv2.imread).
-        style: One of the supported style names.
-        line_thickness: Controls line weight where applicable (1-5, default 2).
+        name: One of the supported style identifiers.
 
     Returns:
-        Grayscale coloring-book image (white background, black lines).
+        Dict with keys ``name``, ``description``, and ``prompt``.
 
     Raises:
         ValueError: If the style is not recognised.
     """
-    if style not in SUPPORTED_STYLES:
+    if name not in STYLE_INFO:
         raise ValueError(
-            f"Unknown style '{style}'. Supported styles: {', '.join(SUPPORTED_STYLES)}"
+            f"Unknown style '{name}'. "
+            f"Supported styles: {', '.join(SUPPORTED_STYLES)}"
         )
-
-    line_thickness = max(1, min(5, line_thickness))
-
-    dispatch = {
-        "bold_outline": _bold_outline,
-        "detailed_line_art": _detailed_line_art,
-        "smooth_contour": _smooth_contour,
-        "sketch": _sketch,
-    }
-    return dispatch[style](image, line_thickness)
+    return STYLE_INFO[name]
 
 
-# ---------------------------------------------------------------------------
-# Style implementations
-# ---------------------------------------------------------------------------
+def get_prompt(style: str) -> str:
+    """Return the image-transformation prompt for a given style.
 
-def _bold_outline(image: np.ndarray, thickness: int) -> np.ndarray:
-    """Thick, simplified contours — great for kids' coloring books."""
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    Args:
+        style: One of the supported style identifiers.
 
-    # Strong bilateral filter to simplify while keeping edges
-    filtered = cv2.bilateralFilter(gray, d=9, sigmaColor=75, sigmaSpace=75)
-    filtered = cv2.bilateralFilter(filtered, d=9, sigmaColor=75, sigmaSpace=75)
-
-    # Adaptive threshold gives strong black/white separation
-    edges = cv2.adaptiveThreshold(
-        filtered, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, blockSize=9, C=2
-    )
-
-    # Dilate to thicken lines, then re-thin slightly for clean look
-    kernel = np.ones((thickness, thickness), np.uint8)
-    edges = cv2.erode(edges, kernel, iterations=1)
-
-    return edges
-
-
-def _detailed_line_art(image: np.ndarray, thickness: int) -> np.ndarray:
-    """Fine edge detection with detail preservation — ideal for adults."""
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Light blur to reduce noise but keep detail
-    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
-
-    # Multi-scale Canny for rich detail
-    edges_fine = cv2.Canny(blurred, 30, 80)
-    edges_coarse = cv2.Canny(blurred, 50, 150)
-    combined = cv2.bitwise_or(edges_fine, edges_coarse)
-
-    # Adaptive threshold layer for extra detail
-    adaptive = cv2.adaptiveThreshold(
-        blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, blockSize=11, C=2
-    )
-
-    # Merge: edges from Canny + adaptive threshold detail
-    combined_inv = cv2.bitwise_not(combined)
-    result = cv2.bitwise_and(adaptive, combined_inv)
-
-    # Optionally thicken
-    if thickness > 1:
-        kernel = np.ones((thickness, thickness), np.uint8)
-        result = cv2.erode(result, kernel, iterations=1)
-
-    return result
-
-
-def _smooth_contour(image: np.ndarray, thickness: int) -> np.ndarray:
-    """Clean, smooth outlines with a cartoon-like feel."""
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Heavy blur for very smooth edges
-    blurred = cv2.medianBlur(gray, 7)
-
-    # Laplacian for smooth contour detection
-    laplacian = cv2.Laplacian(blurred, cv2.CV_64F)
-    laplacian = np.uint8(np.absolute(laplacian))
-
-    # Threshold to binary
-    _, binary = cv2.threshold(laplacian, 15, 255, cv2.THRESH_BINARY)
-
-    # Invert so lines are black on white
-    result = cv2.bitwise_not(binary)
-
-    # Close small gaps
-    kernel = np.ones((2, 2), np.uint8)
-    result = cv2.morphologyEx(result, cv2.MORPH_CLOSE, kernel)
-
-    # Thicken lines
-    if thickness > 1:
-        erode_kernel = np.ones((thickness, thickness), np.uint8)
-        result = cv2.erode(result, erode_kernel, iterations=1)
-
-    return result
-
-
-def _sketch(image: np.ndarray, thickness: int) -> np.ndarray:
-    """Pencil sketch effect with light shading."""
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    inv = cv2.bitwise_not(gray)
-
-    # Gaussian blur on inverted image
-    blur_size = 21 + (thickness * 10)
-    if blur_size % 2 == 0:
-        blur_size += 1
-    blurred_inv = cv2.GaussianBlur(inv, (blur_size, blur_size), 0)
-
-    # Divide gray by inverted-blurred to get pencil sketch
-    sketch = cv2.divide(gray, cv2.bitwise_not(blurred_inv), scale=256)
-
-    # Boost contrast so lines are stronger
-    _, sketch = cv2.threshold(sketch, 240, 255, cv2.THRESH_TRUNC)
-    sketch = cv2.normalize(sketch, None, 0, 255, cv2.NORM_MINMAX)
-
-    return sketch
+    Returns:
+        The complete prompt string ready to send alongside the input image.
+    """
+    return get_style(style)["prompt"]

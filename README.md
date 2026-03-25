@@ -1,22 +1,28 @@
 # Coloring Book Engine
 
-Convert photographs into coloring book style line-art images, ready for
-print-on-demand coloring books.
+AI-powered conversion of photographs into **coloring book illustrations**,
+ready for print-on-demand coloring books.
+
+The engine uses **OpenAI GPT-4o** (vision) to understand the content of a
+photograph and **DALL-E 3** to generate a clean, bold-outline coloring page —
+no local image-processing heuristics, no grainy black-and-white conversions.
 
 ## Features
 
-* **Four built-in styles** — each tuned for a different audience:
+* **Four popular styles** — each tuned for a different audience:
+
   | Style | Description |
   |---|---|
-  | `bold_outline` | Thick, simplified contours — ideal for young children |
-  | `detailed_line_art` | Fine edges preserving detail — perfect for adult coloring |
-  | `smooth_contour` | Clean, smooth outlines with a cartoon-like feel |
-  | `sketch` | Pencil sketch effect with light shading |
+  | `classic` | Bold, clean outlines with simplified shapes — ideal for kids |
+  | `detailed` | Intricate line art with fine details — perfect for adults |
+  | `whimsical` | Playful cartoon-like illustrations — cheerful and inviting |
+  | `stained_glass` | Geometric stained-glass style with bold cell borders |
 
-* **Batch processing** — point at a folder of photos and get a folder of
-  coloring pages.
-* **Configurable** — line thickness, output size, YAML config files.
-* **No API keys required** — all processing is local via OpenCV.
+* **Batch processing** — point at a folder of photos and generate coloring
+  pages in one or more styles.
+* **Generate all styles at once** — use `--style all` to create one page per
+  style for every photo.
+* **Configurable** — YAML config files, CLI flags, or environment variables.
 
 ## Quick Start
 
@@ -24,16 +30,19 @@ print-on-demand coloring books.
 # Install
 pip install -e .
 
-# Convert a folder of photos (default style: bold_outline)
-coloringbook --input ./photos --output ./coloring_pages
+# Convert a folder of photos (default: classic style, portrait size)
+coloringbook --input ./Photos --output ./coloring_pages --api-key sk-...
 
-# Choose a style and line thickness
-coloringbook --input ./photos --output ./coloring_pages --style sketch --thickness 3
+# Choose a style
+coloringbook --input ./Photos --output ./coloring_pages --style detailed
+
+# Generate all four styles for every photo
+coloringbook --input ./Photos --output ./coloring_pages --style all
 
 # List available styles
 coloringbook --list-styles
 
-# Use a config file instead of CLI flags
+# Use a config file (avoids passing --api-key every time)
 coloringbook --config config.yaml
 ```
 
@@ -42,17 +51,44 @@ coloringbook --config config.yaml
 Copy `config.example.yaml` to `config.yaml` and edit the values:
 
 ```yaml
-input_folder: ./photos
+input_folder: ./Photos
 output_folder: ./coloring_pages
-style: bold_outline
-line_thickness: 2
-# output_width: 2550   # 8.5" at 300 DPI
-# output_height: 3300  # 11" at 300 DPI
+style: classic            # or: detailed, whimsical, stained_glass, all
+size: "1024x1792"         # portrait (coloring book page)
+openai_api_key: sk-...
 ```
+
+You can also pass the API key via the `OPENAI_API_KEY` environment variable.
+
+## Output Sizes
+
+DALL-E 3 supports three output dimensions:
+
+| Size | Orientation |
+|---|---|
+| `1024x1792` | Portrait (default) — standard coloring book page |
+| `1792x1024` | Landscape |
+| `1024x1024` | Square |
 
 ## Supported Image Formats
 
 JPG, JPEG, PNG, BMP, TIFF, WEBP
+
+## How It Works
+
+1. **Analyse** — The input photograph is sent to **GPT-4o** with a vision
+   prompt that asks for a detailed scene description (subjects, poses,
+   setting, objects, spatial relationships).
+
+2. **Generate** — The description is combined with a style-specific prompt
+   and sent to **DALL-E 3** which produces a clean coloring book
+   illustration: black outlines on a pure white background, no shading,
+   no gradients, all areas enclosed with clear closed lines.
+
+3. **Save** — The generated PNG is written to the output folder.
+
+When multiple styles are requested, the photo is described only once and
+the description is reused for each style — saving API calls.
 
 ## Development
 
@@ -60,20 +96,3 @@ JPG, JPEG, PNG, BMP, TIFF, WEBP
 pip install -e ".[dev]"
 pytest
 ```
-
-## How It Works
-
-Each style uses a different OpenCV image-processing pipeline:
-
-1. **Bold Outline** — bilateral filtering to simplify the image while
-   preserving edges, followed by adaptive thresholding and morphological
-   operations to produce thick, clean contours.
-
-2. **Detailed Line Art** — multi-scale Canny edge detection combined with
-   adaptive Gaussian thresholding to capture fine detail.
-
-3. **Smooth Contour** — median blur + Laplacian edge detection for smooth,
-   cartoon-like outlines, with morphological closing to fill small gaps.
-
-4. **Sketch** — a pencil-sketch algorithm that divides the grayscale image
-   by an inverted Gaussian blur of itself, producing natural shading.

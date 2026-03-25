@@ -1,43 +1,74 @@
-"""Tests for coloring book style conversions."""
+"""Tests for coloring book style definitions."""
 
-import numpy as np
 import pytest
 
-from coloringbook.styles import convert, SUPPORTED_STYLES
+from coloringbook.styles import (
+    SUPPORTED_STYLES,
+    STYLE_INFO,
+    get_style,
+    get_prompt,
+)
 
 
-class TestConvert:
-    """Tests for the convert() dispatcher."""
+class TestSupportedStyles:
+    """Ensure the style catalogue is consistent."""
 
-    def test_unknown_style_raises(self, sample_image):
+    def test_supported_styles_not_empty(self):
+        assert len(SUPPORTED_STYLES) > 0
+
+    def test_all_styles_have_info(self):
+        for name in SUPPORTED_STYLES:
+            assert name in STYLE_INFO
+
+    def test_style_info_has_required_keys(self):
+        for name, info in STYLE_INFO.items():
+            assert "name" in info
+            assert "description" in info
+            assert "prompt" in info
+
+    def test_prompt_contains_transform_instruction(self):
+        for name, info in STYLE_INFO.items():
+            assert "Transform this photograph" in info["prompt"], (
+                f"Style '{name}' prompt is missing the transform instruction"
+            )
+
+    def test_prompt_contains_likeness_requirement(self):
+        for name, info in STYLE_INFO.items():
+            assert "likeness" in info["prompt"].lower(), (
+                f"Style '{name}' prompt is missing likeness preservation requirement"
+            )
+
+
+class TestGetStyle:
+    def test_valid_style(self):
+        info = get_style("classic")
+        assert info["name"] == "Classic"
+
+    def test_unknown_style_raises(self):
         with pytest.raises(ValueError, match="Unknown style"):
-            convert(sample_image, "nonexistent_style")
+            get_style("nonexistent")
 
     @pytest.mark.parametrize("style", SUPPORTED_STYLES)
-    def test_each_style_returns_valid_image(self, sample_image, style):
-        result = convert(sample_image, style)
-        assert isinstance(result, np.ndarray)
-        # Should be single-channel (grayscale)
-        assert result.ndim == 2
-        # Same height/width as input
-        assert result.shape[0] == sample_image.shape[0]
-        assert result.shape[1] == sample_image.shape[1]
+    def test_each_supported_style(self, style):
+        info = get_style(style)
+        assert isinstance(info, dict)
+        assert "prompt" in info
+
+
+class TestGetPrompt:
+    def test_returns_string(self):
+        prompt = get_prompt("classic")
+        assert isinstance(prompt, str)
+        assert len(prompt) > 50
+
+    def test_unknown_style_raises(self):
+        with pytest.raises(ValueError, match="Unknown style"):
+            get_prompt("bad_style")
 
     @pytest.mark.parametrize("style", SUPPORTED_STYLES)
-    def test_output_is_uint8(self, sample_image, style):
-        result = convert(sample_image, style)
-        assert result.dtype == np.uint8
-
-    @pytest.mark.parametrize("style", SUPPORTED_STYLES)
-    def test_output_has_both_black_and_white_regions(self, sample_image, style):
-        result = convert(sample_image, style)
-        # A coloring page should have both dark (line) and light (background) pixels
-        assert result.min() < 128, "Expected dark pixels (lines)"
-        assert result.max() > 127, "Expected light pixels (background)"
-
-    def test_line_thickness_is_clamped(self, sample_image):
-        # Should not raise with out-of-range thickness
-        r1 = convert(sample_image, "bold_outline", line_thickness=0)
-        r2 = convert(sample_image, "bold_outline", line_thickness=99)
-        assert r1 is not None
-        assert r2 is not None
+    def test_prompt_includes_coloring_book_instructions(self, style):
+        prompt = get_prompt(style)
+        lower = prompt.lower()
+        assert "black" in lower
+        assert "white" in lower
+        assert "no shading" in lower or "no gradients" in lower

@@ -1,3 +1,3 @@
-"""Coloring Book Engine - Convert photographs into coloring book style images."""
+"""Coloring Book Engine — AI-powered photo-to-coloring-page conversion."""
 
-__version__ = "1.0.0"
+__version__ = "3.0.0"

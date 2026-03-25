@@ -2,20 +2,22 @@
 # Copy this file to config.yaml and adjust the values.
 
 # Required: folder containing source photographs
-input_folder: ./photos
+input_folder: ./Photos
 
 # Required: folder where coloring pages will be saved
 output_folder: ./coloring_pages
 
-# Style: bold_outline | detailed_line_art | smooth_contour | sketch
-style: bold_outline
+# Style(s) to generate.
+# Single style:  classic | detailed | whimsical | stained_glass
+# All styles:    all
+# Or a list:
+#   styles:
+#     - classic
+#     - whimsical
+style: classic
 
-# Line thickness (1 = thin, 5 = very thick)
-line_thickness: 2
+# DALL-E 3 output size: 1024x1024 | 1024x1792 (portrait) | 1792x1024 (landscape)
+size: "1024x1792"
 
-# Optional: resize output images (both width and height must be set)
-# output_width: 2550   # 8.5 inches at 300 DPI
-# output_height: 3300  # 11 inches at 300 DPI
-
-# Optional: OpenAI API key for AI-enhanced conversion (future feature)
+# OpenAI API key (or set the OPENAI_API_KEY environment variable)
 # openai_api_key: sk-...

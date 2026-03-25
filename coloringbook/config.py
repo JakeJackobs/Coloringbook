@@ -2,7 +2,11 @@
 Configuration file support.
 
 Users can provide a YAML config file instead of (or in addition to) CLI flags.
+The ``openai_api_key`` can also be read from the ``OPENAI_API_KEY`` environment
+variable.
 """
+
+from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
@@ -19,22 +23,28 @@ class Config:
 
     input_folder: str = ""
     output_folder: str = ""
-    style: str = "bold_outline"
-    line_thickness: int = 2
-    output_width: Optional[int] = None
-    output_height: Optional[int] = None
-    openai_api_key: Optional[str] = None
-
-    # Derived
-    output_size: Optional[tuple[int, int]] = field(default=None, init=False)
+    style: str = "classic"
+    styles: list[str] = field(default_factory=lambda: ["classic"])
+    size: str = "1024x1536"
+    openai_api_key: str = ""
 
     def __post_init__(self) -> None:
-        if self.output_width and self.output_height:
-            self.output_size = (self.output_width, self.output_height)
-        if self.style not in SUPPORTED_STYLES:
-            raise ValueError(
-                f"Unknown style '{self.style}'. Supported styles: {', '.join(SUPPORTED_STYLES)}"
-            )
+        # Validate every style in the list
+        for s in self.styles:
+            if s not in ("all", *SUPPORTED_STYLES):
+                raise ValueError(
+                    f"Unknown style '{s}'. "
+                    f"Supported: {', '.join(SUPPORTED_STYLES)}, all"
+                )
+
+        # If the caller set ``style`` but left ``styles`` at its default,
+        # keep them in sync.
+        if self.style != "classic" and self.styles == ["classic"]:
+            self.styles = [self.style]
+
+        # Expand the ``all`` shorthand
+        if "all" in self.styles:
+            self.styles = list(SUPPORTED_STYLES)
 
 
 def load_config(path: str) -> Config:
@@ -44,7 +54,7 @@ def load_config(path: str) -> Config:
         path: Path to the YAML config file.
 
     Returns:
-        A populated Config instance.
+        A populated :class:`Config` instance.
 
     Raises:
         FileNotFoundError: If the config file does not exist.
@@ -55,12 +65,21 @@ def load_config(path: str) -> Config:
     with open(path, "r", encoding="utf-8") as fh:
         data = yaml.safe_load(fh) or {}
 
+    # ``styles`` may be a list or a single string in the YAML
+    raw_styles = data.get("styles", data.get("style", "classic"))
+    if isinstance(raw_styles, str):
+        styles_list = [raw_styles]
+    else:
+        styles_list = list(raw_styles)
+
     return Config(
         input_folder=data.get("input_folder", ""),
         output_folder=data.get("output_folder", ""),
-        style=data.get("style", "bold_outline"),
-        line_thickness=data.get("line_thickness", 2),
-        output_width=data.get("output_width"),
-        output_height=data.get("output_height"),
-        openai_api_key=data.get("openai_api_key"),
+        style=data.get("style", "classic"),
+        styles=styles_list,
+        size=data.get("size", "1024x1536"),
+        openai_api_key=data.get(
+            "openai_api_key",
+            os.environ.get("OPENAI_API_KEY", ""),
+        ),
     )
